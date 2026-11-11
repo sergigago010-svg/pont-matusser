@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Ponts i Estructures Física</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        canvas { touch-action: none; }
+        .no-select { user-select: none; -webkit-user-select: none; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col h-screen overflow-hidden no-select">
+
+    <!-- Capçalera principal -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex justify-between items-center z-10 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="p-2 bg-indigo-600 rounded-lg text-white">
+                <i class="fa-solid fa-bridge text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-tight">Simulador Interactiu de Ponts</h1>
+                <p class="text-xs text-slate-400">Anàlisi d'estructures, tensions de compressió i tracció</p>
+            </div>
+        </div>
+        
+        <!-- Estat / Informació rpida -->
+        <div class="flex items-center space-x-6">
+            <div class="text-right hidden md:block">
+                <span class="text-xs text-slate-400 block">Estat del pont</span>
+                <span id="bridgeStatus" class="font-semibold text-emerald-400 text-sm">Estable</span>
+            </div>
+            <div class="text-right hidden md:block">
+                <span class="text-xs text-slate-400 block">Càrrega Máxima</span>
+                <span id="maxStressText" class="font-semibold text-amber-400 text-sm">0 %</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Content Principal -->
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+        
+        <!-- Panell Lateral Esquerre: Eines i Configuració -->
+        <aside class="w-full md:w-80 bg-slate-800/90 border-r border-slate-700 flex flex-col z-10 overflow-y-auto shrink-0">
+            
+            <!-- Selecció de Plantilles -->
+            <div class="p-4 border-b border-slate-700">
+                <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Plantilles de Ponts</h2>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="loadPreset('truss')" class="p-2 bg-slate-700 hover:bg-slate-600 rounded text-xs flex flex-col items-center justify-center space-y-1 transition text-slate-200">
+                        <i class="fa-solid fa-chart-area text-indigo-400"></i>
+                        <span>Encavallada</span>
+                    </button>
+                    <button onclick="loadPreset('arch')" class="p-2 bg-slate-700 hover:bg-slate-600 rounded text-xs flex flex-col items-center justify-center space-y-1 transition text-slate-200">
+                        <i class="fa-solid fa-circle-notch text-indigo-400"></i>
+                        <span>Arc</span>
+                    </button>
+                    <button onclick="loadPreset('suspension')" class="p-2 bg-slate-700 hover:bg-slate-600 rounded text-xs flex flex-col items-center justify-center space-y-1 transition text-slate-200">
+                        <i class="fa-solid fa-project-diagram text-indigo-400"></i>
+                        <span>Suspensió</span>
+                    </button>
+                    <button onclick="loadPreset('beam')" class="p-2 bg-slate-700 hover:bg-slate-600 rounded text-xs flex flex-col items-center justify-center space-y-1 transition text-slate-200">
+                        <i class="fa-solid fa-minus text-indigo-400"></i>
+                        <span>Biga Simple</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mode de Construcció -->
+            <div class="p-4 border-b border-slate-700">
+                <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Eines de Construcció</h2>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="toolNodeBtn" onclick="setTool('node')" class="p-2 bg-indigo-600 hover:bg-indigo-500 rounded text-xs flex items-center justify-center space-x-2 transition text-white">
+                        <i class="fa-solid fa-circle-dot"></i>
+                        <span>Afegir Node</span>
+                    </button>
+                    <button id="toolBeamBtn" onclick="setTool('beam')" class="p-2 bg-slate-700 hover:bg-slate-600 rounded text-xs flex items-center justify-center space-x-2 transition text-slate-200">
+                        <i class="fa-solid fa-slash"></i>
+                        <span>Afegir Biga</span>
+                    </button>
+                    <button id="toolDeleteBtn" onclick="setTool('delete')" class="p-2 bg-slate-700 hover:bg-slate-600 rounded text-xs flex items-center justify-center space-x-2 transition text-slate-200 col-span-2">
+                        <i class="fa-solid fa-trash-can text-rose-400"></i>
+                        <span>Esborrar Element</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Paràmetres i Simulació -->
+            <div class="p-4 border-b border-slate-700 space-y-4">
+                <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Paràmetres del Vehicle i Física</h2>
+                
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-slate-300">Pes del Vehicle</span>
+                        <span id="valVehicleMass" class="text-indigo-400 font-mono">1500 kg</span>
+                    </div>
+                    <input type="range" id="vehicleMass" min="500" max="8000" step="100" value="1500" class="w-full accent-indigo-500 bg-slate-700 rounded h-1.5 cursor-pointer">
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-slate-300">Velocitat del Vehicle</span>
+                        <span id="valVehicleSpeed" class="text-indigo-400 font-mono">Normal</span>
+                    </div>
+                    <input type="range" id="vehicleSpeed" min="1" max="5" step="1" value="2" class="w-full accent-indigo-500 bg-slate-700 rounded h-1.5 cursor-pointer">
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-slate-300">Resistència dels Materials</span>
+                        <span id="valMaterialStrength" class="text-indigo-400 font-mono">Mitjana</span>
+                    </div>
+                    <input type="range" id="materialStrength" min="1" max="3" step="1" value="2" class="w-full accent-indigo-500 bg-slate-700 rounded h-1.5 cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Llegenda de Tensions -->
+            <div class="p-4 mt-auto">
+                <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Llegenda de Forces</h2>
+                <div class="space-y-2 text-xs">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                        <span class="text-slate-300">Compressió (Empeny cap endins)</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full bg-sky-400"></span>
+                        <span class="text-slate-300">Tracció / Tensió (Estira cap enfora)</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
+                        <span class="text-slate-300">Equilibri / Sense Estrès</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Àrea Principal de Dibuix/Física -->
+        <main class="flex-1 relative flex flex-col bg-slate-950">
+            <!-- Canvas -->
+            <canvas id="simCanvas" class="w-full h-full cursor-crosshair"></canvas>
+
+            <!-- Barra de Controls Flotant (A baix) -->
+            <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-800/90 border border-slate-700 px-6 py-3 rounded-full shadow-2xl flex items-center space-x-4 backdrop-blur-md">
+                <button id="btnPlayPause" onclick="toggleSimulation()" class="p-3 bg-emerald-600 hover:bg-emerald-500 rounded-full text-white w-12 h-12 flex items-center justify-center transition shadow-lg">
+                    <i class="fa-solid fa-play text-lg" id="playIcon"></i>
+                </button>
+                <button onclick="resetSimulation()" class="p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-slate-200 w-10 h-10 flex items-center justify-center transition" title="Reiniciar Vehicle">
+                    <i class="fa-solid fa-rotate-left"></i>
+                </button>
+                <div class="h-6 w-px bg-slate-700"></div>
+                <button onclick="clearBridge()" class="p-2 text-rose-400 hover:text-rose-300 text-xs font-medium flex items-center space-x-1 transition">
+                    <i class="fa-solid fa-broom"></i>
+                    <span>Netejar tot</span>
+                </button>
+            </div>
+
+            <!-- Guia d'Instruccions de la Pantalla -->
+            <div class="absolute top-4 left-4 bg-slate-800/80 border border-slate-700 p-3 rounded-lg text-xs text-slate-300 backdrop-blur pointer-events-none max-w-xs">
+                <p class="font-semibold text-slate-100 mb-1"><i class="fa-solid fa-circle-info mr-1 text-indigo-400"></i> Com utilitzar:</p>
+                <ul class="list-disc list-inside space-y-1 text-slate-400">
+                    <li>Selecciona una plantilla o dibuixa el teu propi pont.</li>
+                    <li>Amb <strong>Afegir Node</strong>, fes clic per crear punts.</li>
+                    <li>Amb <strong>Afegir Biga</strong>, arrossega entre dos nodes.</li>
+                    <li>Prem <strong>Iniciar (Play)</strong> perquè el cotxe creuï el pont!</li>
+                </ul>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Configuració del Canvas
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // Estat Global de la Simulació
+        let nodes = [];
+        let beams = [];
+        let selectedNode = null;
+        let currentTool = 'node'; // 'node', 'beam', 'delete'
+        let dragStartNode = null;
+        let hoverPos = null;
+
+        let isSimulating = false;
+        let vehicle = {
+            active: false,
+            x: 0,
+            beamIndex: -1,
+            progress: 0,
+            mass: 1500,
+            speed: 2
+        };
+
+        // Definició de Suports Fixos (Extrems del pont)
+        let leftAnchor = { x: 0, y: 0 };
+        let rightAnchor = { x: 0, y: 0 };
+
+        class Node {
+            constructor(x, y, isFixed = false, isDeck = false) {
+                this.x = x;
+                this.y = y;
+                this.ox = x;
+                this.oy = y;
+                this.vx = 0;
+                this.vy = 0;
+                this.isFixed = isFixed;
+                this.isDeck = isDeck; // Indica si forma part de la calçada
+                this.mass = isFixed ? 999999 : 10;
+            }
+        }
+
+        class Beam {
+            constructor(nodeA, nodeB) {
+                this.n1 = nodeA;
+                this.n2 = nodeB;
+                this.length = Math.hypot(nodeB.x - nodeA.x, nodeB.y - nodeA.y);
+                this.stress = 0; // Positiu = Tracció, Negatiu = Compressió
+                this.maxStress = 2.5; // Límit abans de trencar-se
+                this.broken = false;
+            }
+        }
+
+        // Inicialització
+        function init() {
+            resizeCanvas();
+            loadPreset('truss');
+            setupControls();
+            requestAnimationFrame(simLoop);
+        }
+
+        // Carregar Plantilles Predefinides
+        function loadPreset(type) {
+            nodes = [];
+            beams = [];
+            isSimulating = false;
+            updatePlayButton();
+
+            const w = canvas.width;
+            const h = canvas.height;
+            const margin = Math.max(80, w * 0.1);
+            const deckY = h * 0.6;
+            const bridgeWidth = w - margin * 2;
+            const numDeckNodes = 8;
+            const step = bridgeWidth / (numDeckNodes - 1);
+
+            // Creació de la calçada (Deck)
+            let deckNodes = [];
+            for (let i = 0; i < numDeckNodes; i++) {
+                let isFixed = (i === 0 || i === numDeckNodes - 1);
+                let n = new Node(margin + i * step, deckY, isFixed, true);
+                nodes.push(n);
+                deckNodes.push(n);
+            }
+
+            // Unir la calçada amb biges
+            for (let i = 0; i < deckNodes.length - 1; i++) {
+                beams.push(new Beam(deckNodes[i], deckNodes[i+1]));
+            }
+
+            // Estrutures superiors/inferiors segons el tipus
+            if (type === 'truss') { // Encavallada estil Pratt
+                let topNodes = [];
+                const height = 90;
+                for (let i = 0; i < numDeckNodes; i++) {
+                    let n = new Node(margin + i * step, deckY - height, false, false);
+                    nodes.push(n);
+                    topNodes.push(n);
+                }
+                for (let i = 0; i < topNodes.length - 1; i++) {
+                    beams.push(new Beam(topNodes[i], topNodes[i+1]));
+                    beams.push(new Beam(deckNodes[i], topNodes[i]));
+                    beams.push(new Beam(deckNodes[i+1], topNodes[i]));
+                    beams.push(new Beam(deckNodes[i], topNodes[i+1]));
+                }
+                beams.push(new Beam(deckNodes[topNodes.length-1], topNodes[topNodes.length-1]));
+
+            } else if (type === 'arch') { // Pont d'Arc
+                const height = 120;
+                let archNodes = [];
+                for (let i = 0; i < numDeckNodes; i++) {
+                    let t = i / (numDeckNodes - 1);
+                    let archY = deckY + Math.sin(t * Math.PI) * height; // Arc cap a baix
+                    let n = new Node(margin + i * step, archY, i === 0 || i === numDeckNodes - 1);
+                    nodes.push(n);
+                    archNodes.push(n);
+                }
+                for (let i = 0; i < archNodes.length - 1; i++) {
+                    beams.push(new Beam(archNodes[i], archNodes[i+1]));
+                    beams.push(new Beam(deckNodes[i], archNodes[i]));
+                }
+                beams.push(new Beam(deckNodes[numDeckNodes-1], archNodes[numDeckNodes-1]));
+
+            } else if (type === 'suspension') { // Pont Penjat
+                let pilar1 = new Node(margin + step * 2, deckY - 140, true);
+                let pilar2 = new Node(margin + step * 5, deckY - 140, true);
+                nodes.push(pilar1, pilar2);
+
+                beams.push(new Beam(deckNodes[0], pilar1));
+                beams.push(new Beam(deckNodes[numDeckNodes-1], pilar2));
+
+                for (let i = 1; i < numDeckNodes - 1; i++) {
+                    if (i <= 3) beams.push(new Beam(deckNodes[i], pilar1));
+                    if (i >= 4) beams.push(new Beam(deckNodes[i], pilar2));
+                }
+            }
+
+            resetVehicle();
+        }
+
+        // Gestió d'eines de construcció
+        function setTool(tool) {
+            currentTool = tool;
+            ['toolNodeBtn', 'toolBeamBtn', 'toolDeleteBtn'].forEach(id => {
+                document.getElementById(id).className = "p-2 bg-slate-700 hover:bg-slate-600 rounded text-xs flex items-center justify-center space-x-2 transition text-slate-200";
+            });
+
+            if (tool === 'node') document.getElementById('toolNodeBtn').className = "p-2 bg-indigo-600 rounded text-xs flex items-center justify-center space-x-2 transition text-white";
+            if (tool === 'beam') document.getElementById('toolBeamBtn').className = "p-2 bg-indigo-600 rounded text-xs flex items-center justify-center space-x-2 transition text-white";
+            if (tool === 'delete') document.getElementById('toolDeleteBtn').className = "p-2 bg-rose-600 rounded text-xs flex items-center justify-center space-x-2 transition text-white col-span-2";
+        }
+
+        // Interacció amb el ratolí/pantalla tàctil
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const clickedNode = findNodeNear(x, y);
+
+            if (currentTool === 'node') {
+                if (!clickedNode) {
+                    nodes.push(new Node(x, y));
+                }
+            } else if (currentTool === 'beam') {
+                if (clickedNode) {
+                    dragStartNode = clickedNode;
+                }
+            } else if (currentTool === 'delete') {
+                if (clickedNode) {
+                    // Si el node està fixat als extrems, no permetre eliminar si trenca la base
+                    nodes = nodes.filter(n => n !== clickedNode);
+                    beams = beams.filter(b => b.n1 !== clickedNode && b.n2 !== clickedNode);
+                } else {
+                    // Esborrar biga a la vora del clic
+                    let bIndex = findBeamNear(x, y);
+                    if (bIndex !== -1) beams.splice(bIndex, 1);
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            hoverPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (currentTool === 'beam' && dragStartNode) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const targetNode = findNodeNear(x, y);
+
+                if (targetNode && targetNode !== dragStartNode) {
+                    // Comprovar si ja existeix una biga entre ells
+                    let exists = beams.some(b => (b.n1 === dragStartNode && b.n2 === targetNode) || (b.n1 === targetNode && b.n2 === dragStartNode));
+                    if (!exists) {
+                        beams.push(new Beam(dragStartNode, targetNode));
+                    }
+                }
+                dragStartNode = null;
+            }
+        });
+
+        function findNodeNear(x, y, radius = 15) {
+            return nodes.find(n => Math.hypot(n.x - x, n.y - y) < radius);
+        }
+
+        function findBeamNear(x, y, maxDist = 8) {
+            return beams.findIndex(b => {
+                let d = distToSegment({x, y}, b.n1, b.n2);
+                return d < maxDist;
+            });
+        }
+
+        function distToSegment(p, v, w) {
+            let l2 = Math.hypot(v.x - w.x, v.y - w.y) ** 2;
+            if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
+            let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)));
+        }
+
+        // Configuració dels Controls de la Interfície
+        function setupControls() {
+            document.getElementById('vehicleMass').addEventListener('input', (e) => {
+                vehicle.mass = parseInt(e.target.value);
+                document.getElementById('valVehicleMass').textContent = `${vehicle.mass} kg`;
+            });
+
+            document.getElementById('vehicleSpeed').addEventListener('input', (e) => {
+                vehicle.speed = parseInt(e.target.value);
+                const labels = ["Molt lent", "Lent", "Normal", "Ràpid", "Molt Ràpid"];
+                document.getElementById('valVehicleSpeed').textContent = labels[vehicle.speed - 1];
+            });
+
+            document.getElementById('materialStrength').addEventListener('input', (e) => {
+                const val = parseInt(e.target.value);
+                const labels = ["Baixa", "Mitjana", "Alta"];
+                document.getElementById('valMaterialStrength').textContent = labels[val - 1];
+                beams.forEach(b => b.maxStress = val * 1.5);
+            });
+        }
+
+        function toggleSimulation() {
+            isSimulating = !isSimulating;
+            if (isSimulating && !vehicle.active) {
+                resetVehicle();
+                vehicle.active = true;
+            }
+            updatePlayButton();
+        }
+
+        function updatePlayButton() {
+            const btn = document.getElementById('playIcon');
+            if (isSimulating) {
+                btn.className = "fa-solid fa-pause text-lg";
+            } else {
+                btn.className = "fa-solid fa-play text-lg";
+            }
+        }
+
+        function resetSimulation() {
+            resetVehicle();
+            // Restaurar posició inicial dels nodes si s'han deformat
+            nodes.forEach(n => {
+                n.x = n.ox;
+                n.y = n.oy;
+                n.vx = 0;
+                n.vy = 0;
+            });
+            beams.forEach(b => b.broken = false);
+            document.getElementById('bridgeStatus').textContent = "Estable";
+            document.getElementById('bridgeStatus').className = "font-semibold text-emerald-400 text-sm";
+        }
+
+        function resetVehicle() {
+            // Cercar el primer node de la calçada (a la meitat esquerra)
+            let deckNodes = nodes.filter(n => n.isDeck).sort((a,b) => a.x - b.x);
+            if (deckNodes.length > 0) {
+                vehicle.x = deckNodes[0].x;
+                vehicle.active = true;
+            }
+        }
+
+        function clearBridge() {
+            nodes = [];
+            beams = [];
+            isSimulating = false;
+            updatePlayButton();
+        }
+
+        // simulació Física (Integració de Verlet / Springs)
+        function updatePhysics() {
+            if (!isSimulating) return;
+
+            const gravity = 0.15;
+            const iterations = 8; // Iteracions per estabilitzar forces
+
+            // 1. Aplicar gravetat als nodes lliures
+            nodes.forEach(n => {
+                if (!n.isFixed) {
+                    n.vy += gravity;
+                    n.x += n.vx;
+                    n.y += n.vy;
+                    n.vx *= 0.98; // Amortiguament
+                    n.vy *= 0.98;
+                }
+            });
+
+            // 2. Moviment del vehicle i aplicació de la seva càrrega
+            if (vehicle.active) {
+                vehicle.x += vehicle.speed * 1.2;
+
+                // Trobar la barra o nodes sobre els quals es troba el cotxe
+                let deckNodes = nodes.filter(n => n.isDeck).sort((a,b) => a.x - b.x);
+                
+                let currentSegment = -1;
+                for (let i = 0; i < deckNodes.length - 1; i++) {
+                    if (vehicle.x >= deckNodes[i].x && vehicle.x <= deckNodes[i+1].x) {
+                        currentSegment = i;
+                        break;
+                    }
+                }
+
+                if (currentSegment !== -1) {
+                    let n1 = deckNodes[currentSegment];
+                    let n2 = deckNodes[currentSegment + 1];
+                    let ratio = (vehicle.x - n1.x) / (n2.x - n1.x);
+
+                    // Repartir pes del vehicle entre els dos nodes més propers
+                    let load = (vehicle.mass / 1000) * 0.4;
+                    n1.vy += load * (1 - ratio);
+                    n2.vy += load * ratio;
+                } else if (deckNodes.length > 0 && vehicle.x > deckNodes[deckNodes.length - 1].x) {
+                    // Vehicle ha arribat a l'altre extrem
+                    vehicle.active = false;
+                }
+            }
+
+            // 3. Resolució de restriccions (biges com a molles rígides)
+            let maxStressRecorded = 0;
+            let bridgeBroken = false;
+
+            for (let iter = 0; iter < iterations; iter++) {
+                beams.forEach(b => {
+                    if (b.broken) return;
+
+                    let dx = b.n2.x - b.n1.x;
+                    let dy = b.n2.y - b.n1.y;
+                    let currentLen = Math.hypot(dx, dy);
+
+                    if (currentLen === 0) return;
+
+                    let delta = currentLen - b.length;
+                    // Calcular tensió: >0 tracció (estirat), <0 compressió (comprimit)
+                    b.stress = delta / b.length * 100;
+
+                    let absStress = Math.abs(b.stress);
+                    if (absStress > maxStressRecorded) maxStressRecorded = absStress;
+
+                    // Si la tensió supera el límit del material, la biga es trenca
+                    if (absStress > b.maxStress * 15) {
+                        b.broken = true;
+                        bridgeBroken = true;
+                    }
+
+                    // Força de reacció de la molla
+                    let stiffness = 0.5;
+                    let fx = (dx / currentLen) * delta * stiffness;
+                    let fy = (dy / currentLen) * delta * stiffness;
+
+                    if (!b.n1.isFixed) {
+                        b.n1.x += fx;
+                        b.n1.y += fy;
+                    }
+                    if (!b.n2.isFixed) {
+                        b.n2.x -= fx;
+                        b.n2.y -= fy;
+                    }
+                });
+            }
+
+            // Actualitzar informació en pantalla
+            const maxStressElem = document.getElementById('maxStressText');
+            let percentage = Math.min(100, Math.round((maxStressRecorded / 25) * 100));
+            maxStressElem.textContent = `${percentage} %`;
+
+            if (bridgeBroken || percentage > 85) {
+                document.getElementById('bridgeStatus').textContent = bridgeBroken ? "COL·LAPSAT!" : "Perill de fallida";
+                document.getElementById('bridgeStatus').className = bridgeBroken ? "font-semibold text-rose-500 text-sm animate-pulse" : "font-semibold text-amber-400 text-sm";
+            }
+        }
+
+        // Bucle de Renderitzat
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Dibuixar Fons i Terreny (Riu / Penya-segats)
+            drawEnvironment();
+
+            // 2. Dibuixar Biges/Estructures
+            beams.forEach(b => {
+                if (b.broken) return;
+
+                ctx.beginPath();
+                ctx.moveTo(b.n1.x, b.n1.y);
+                ctx.lineTo(b.n2.x, b.n2.y);
+                ctx.lineWidth = 4;
+
+                // Color segons la tensió
+                // Compressió = Vermell/Taronja, Tracció = Blau, Neutre = Verd
+                if (b.stress > 0.5) {
+                    // Tracció
+                    let intensity = Math.min(255, Math.floor(b.stress * 40));
+                    ctx.strokeStyle = `rgb(56, 189, 248)`; // Sky blue
+                } else if (b.stress < -0.5) {
+                    // Compressió
+                    let intensity = Math.min(255, Math.floor(Math.abs(b.stress) * 40));
+                    ctx.strokeStyle = `rgb(244, 63, 94)`; // Rose red
+                } else {
+                    ctx.strokeStyle = `rgb(52, 211, 153)`; // Emerald green
+                }
+
+                ctx.stroke();
+            });
+
+            // Preview de creació de biga en arrossegar
+            if (currentTool === 'beam' && dragStartNode && hoverPos) {
+                ctx.beginPath();
+                ctx.moveTo(dragStartNode.x, dragStartNode.y);
+                ctx.lineTo(hoverPos.x, hoverPos.y);
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeStyle = '#a5b4fc';
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // 3. Dibuixar Nodes
+            nodes.forEach(n => {
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, n.isFixed ? 7 : 5, 0, Math.PI * 2);
+                
+                if (n.isFixed) {
+                    ctx.fillStyle = '#f59e0b'; // Amber per suports d'ancoratge
+                } else if (n.isDeck) {
+                    ctx.fillStyle = '#6366f1'; // Indigo per la pista de conducció
+                } else {
+                    ctx.fillStyle = '#cbd5e1'; // Slate light
+                }
+
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#0f172a';
+                ctx.stroke();
+            });
+
+            // 4. Dibuixar el Vehicle
+            if (vehicle.active) {
+                drawVehicle(vehicle.x);
+            }
+        }
+
+        function drawEnvironment() {
+            const h = canvas.height;
+            const w = canvas.width;
+            const margin = Math.max(80, w * 0.1);
+            const deckY = h * 0.6;
+
+            // Aigua a baix
+            ctx.fillStyle = '#0e7490';
+            ctx.fillRect(0, h - 80, w, 80);
+
+            // Penya-segat Esquerre
+            ctx.fillStyle = '#334155';
+            ctx.beginPath();
+            ctx.moveTo(0, deckY);
+            ctx.lineTo(margin, deckY);
+            ctx.lineTo(margin - 20, h);
+            ctx.lineTo(0, h);
+            ctx.fill();
+
+            // Penya-segat Dret
+            ctx.beginPath();
+            ctx.moveTo(w, deckY);
+            ctx.lineTo(w - margin, deckY);
+            ctx.lineTo(w - margin + 20, h);
+            ctx.lineTo(w, h);
+            ctx.fill();
+        }
+
+        function drawVehicle(x) {
+            // Trobar alçada 'y' aproximada de la calçada
+            let deckNodes = nodes.filter(n => n.isDeck).sort((a,b) => a.x - b.x);
+            let y = canvas.height * 0.6 - 12;
+
+            for (let i = 0; i < deckNodes.length - 1; i++) {
+                if (x >= deckNodes[i].x && x <= deckNodes[i+1].x) {
+                    let r = (x - deckNodes[i].x) / (deckNodes[i+1].x - deckNodes[i].x);
+                    y = deckNodes[i].y + r * (deckNodes[i+1].y - deckNodes[i].y) - 12;
+                    break;
+                }
+            }
+
+            // Dibuix d'un camió/cotxe estilitzat
+            ctx.fillStyle = '#f43f5e';
+            ctx.fillRect(x - 20, y - 10, 30, 12); // Cos principal
+            ctx.fillStyle = '#fbbf24';
+            ctx.fillRect(x + 10, y - 6, 8, 8); // Cabina davant
+
+            // Rodes
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath();
+            ctx.arc(x - 12, y + 2, 4, 0, Math.PI * 2);
+            ctx.arc(x + 5, y + 2, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Bucle Principal
+        function simLoop() {
+            updatePhysics();
+            render();
+            requestAnimationFrame(simLoop);
+        }
+
+        // Iniciar en carregar la pàgina
+        window.onload = init;
+    </script>
+</body>
+</html>
